@@ -3,3 +3,4 @@
 .settings
 .classpath
 /activemq-data
+*.idea

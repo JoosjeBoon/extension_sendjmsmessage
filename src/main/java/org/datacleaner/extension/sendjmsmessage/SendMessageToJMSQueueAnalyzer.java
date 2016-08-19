@@ -6,26 +6,12 @@ import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
-
 import javax.inject.Named;
 
 import org.apache.metamodel.util.FileHelper;
 import org.apache.metamodel.util.Func;
 import org.apache.metamodel.util.Resource;
-import org.datacleaner.api.Analyzer;
-import org.datacleaner.api.Categorized;
-import org.datacleaner.api.Close;
-import org.datacleaner.api.ComponentContext;
-import org.datacleaner.api.Concurrent;
-import org.datacleaner.api.Configured;
-import org.datacleaner.api.Description;
-import org.datacleaner.api.ExecutionLogMessage;
-import org.datacleaner.api.Initialize;
-import org.datacleaner.api.InputColumn;
-import org.datacleaner.api.InputRow;
-import org.datacleaner.api.MappedProperty;
-import org.datacleaner.api.Provided;
-import org.datacleaner.api.Validate;
+import org.datacleaner.api.*;
 import org.datacleaner.components.categories.WriteSuperCategory;
 import org.datacleaner.components.convert.ConvertToStringTransformer;
 
@@ -54,10 +40,13 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     @Configured
     InputColumn<?> idColumn;
 
-    @Configured(value = "Broker url", order = 100)
+    @Configured(value = "Select JMS Broker", order = 100)
+    String broker;
+
+    @Configured(value = "Broker url", order = 101)
     String brokerUrl;
 
-    @Configured(value = "JMS queue name", order = 101)
+    @Configured(value = "JMS queue name", order = 102)
     String jmsQueueName;
 
     @Configured(value = "Message template", required = true)
@@ -73,7 +62,10 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     ComponentContext _componentContext;
 
     private String _messageTemplateString;
-    private JMSMessageToQueueSender _jmsMessageSender;
+//    private JMSMessageToQueueSender _jmsMessageSender;
+
+    private JmsQueueSender _jmsMessageSender2;
+
     private AtomicInteger _successCount;
     private AtomicInteger _skipCount;
     private Collection<SendMessageToJMSQueueResult> _failures;
@@ -95,7 +87,8 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     public void init() {
         _messageTemplateString = loadTemplate(messageTemplate);
         try {
-            _jmsMessageSender = new JMSMessageToQueueSender(brokerUrl, jmsQueueName);
+//            _jmsMessageSender2 = new JmsQueueSender(JmsConnectionFactory.get(broker));
+            //_jmsMessageSender = new JMSMessageToQueueSender(brokerUrl, jmsQueueName);
         } catch (Exception e) {
             throw new IllegalStateException("JMS sender could not be initialized", e);
         }
@@ -126,17 +119,16 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
         final String messageBody = buildMessageBodyFromTemplate(_messageTemplateString, fields, rowValues);
         final String id = ConvertToStringTransformer.transformValue(row.getValue(idColumn));
 
-        final SendMessageToJMSQueueResult result = _jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody,
-                id);
-        if (result.isSuccessful()) {
+        final boolean result = _jmsMessageSender2.simpleSend(); //_jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody, id);
+        if (result) {
             _successCount.incrementAndGet();
         } else {
-            _failures.add(result);
+//            _failures.add("failes");
 
             // report to the execution log
-            final Exception error = result.getError();
-            _componentContext.publishMessage(new ExecutionLogMessage("Sending Message '"
-                    + result.getMessageIdentifier() + " failed! " + (error == null ? "" : error.getMessage())));
+//            final Exception error = result.getError();
+//            _componentContext.publishMessage(new ExecutionLogMessage("Sending Message '"
+//                    + result.getMessageIdentifier() + " failed! " + (error == null ? "" : error.getMessage())));
         }
     }
 
@@ -194,8 +186,8 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     @Close
     public void close() {
         try {
-            if (_jmsMessageSender != null) {
-                _jmsMessageSender.close();
+            if (_jmsMessageSender2 != null) {
+               // _jmsMessageSender2.close();
             }
         } catch (Exception e) {
             throw new IllegalStateException("Stopping CamelContext failed", e);
