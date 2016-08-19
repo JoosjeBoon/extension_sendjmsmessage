@@ -7,21 +7,19 @@ import javax.naming.directory.InitialDirContext;
 
 public class JmsConnectionFactory {
 
-    // These are the JNDI object names expected.
-    public static final String connFactoryToLookFor = "JMSDEMOCF";
-    public static final String connFactoryForTopic = "JMSDEMOTopic";
-    public static final String connFactoryForQueue = "JMSDEMOQueue";
-    public static final String defaultContextFactory = "com.sun.jndi.fscontext.RefFSContextFactory";
+    // These are the JNDI object names -> these names are MQ specific. Consult the java documentation of the wanted queue server to find out which values can be used here.
+    public static final String mqInitialContextFactoryClass = "org.apache.activemq.jndi.ActiveMQInitialContextFactory"; //websphere -> "com.sun.jndi.fscontext.RefFSContextFactory";
+    public static final String mqConnectionFactoryClass = "QueueConnectionFactory"; //"ConnectionFactory";
+    public static final String queueConnectionName = "dynamicQueues/test-send-msg";
 
-    // Class variables
+    // Application variables
     static Session session = null; // JMS Session
     static Connection connection = null; // JMS Connection
-    static String connFactoryType = connFactoryForQueue; // Generic JMS Destination
-    static String operationType = "put"; // Program mode
-    static String destType = null; // Destination type
+    static String connectTo = queueConnectionName; // Generic JMS Destination
+    static String operationType = "put"; // put or get from queue
 
-    // JNDI Provider URL - may be overridden from the command line.
-    static String url = "file:C:\\Users\\joserelda\\Desktop\\MQTEST\\JMSDEMO\\JNDI";
+    // JNDI Provider URL - The broker url active MQ default= tcp://localhost:61616
+    static String url = "tcp://localhost:61616";
 
     public static void main(String[] args) {
 
@@ -29,37 +27,37 @@ public class JmsConnectionFactory {
         Destination myDest = null;
         ConnectionFactory connFactory = null;
 
-        // A single try block is used here to allow us to focus on the JNDI and
-        // I/O
-        // operations. Production code would be required to have much finer
-        // grained
-        // exception handling. In any case, always print linked JMS exceptions.
+        // A single try block is used here to allow us to focus on the JNDI and I/O operations.
+        // Production code would be required to have much finer grained exception handling. In any case, always print linked JMS exceptions.
         try {
 //            parseArgs(args);
 
-            System.out.println("Lookup initial context");
+            System.out.println(" ---- START Lookup initial context ---- ");
             Hashtable environment = new Hashtable();
-            environment.put(Context.INITIAL_CONTEXT_FACTORY, defaultContextFactory);
+            environment.put(Context.INITIAL_CONTEXT_FACTORY, mqInitialContextFactoryClass);
             environment.put(Context.PROVIDER_URL, url);
             ctx = new InitialDirContext(environment);
+            System.out.println(" ---- FINISH Lookup initial context ---- ");
 
-            // Note that the generic Connection Factory works for both queues &
-            // topics
-            System.out.println("Lookup connection factory " + connFactoryToLookFor);
-            connFactory = (ConnectionFactory) ctx.lookup(connFactoryToLookFor);
+            // Note that the generic Connection Factory works for both queues &topics
+            System.out.println(" ---- START Lookup connection factory " + mqConnectionFactoryClass + " ---- ");
+            connFactory = (ConnectionFactory) ctx.lookup(mqConnectionFactoryClass);
+            System.out.println(" ---- FINISH Lookup connection factory -> found ---- ");
 
-            System.out.println("Create and start the connection");
+            System.out.println(" ---- START Create and start the connection ---- ");
             connection = connFactory.createConnection();
             connection.start();
+            System.out.println(" ---- FINISH Create and start the connection ---- ");
 
-            System.out.println("Create the session");
+            System.out.println(" ---- START Create the session ---- ");
             boolean transacted = true;
             session = connection.createSession(transacted, Session.AUTO_ACKNOWLEDGE);
 
             // Note that the generic Destination also works for both queues &
             // topics
-            System.out.println("Lookup destination " + connFactoryType);
-            myDest = (Destination) ctx.lookup(connFactoryType);
+            System.out.println(" ---- START Lookup destination: " + connectTo);
+            myDest = (Destination) ctx.lookup(connectTo);
+            System.out.println(" ---- FINISH Lookup destination: " + connectTo);
 
             // Either PUT or GET messages, depending on what was passed in from
             // Cmd Line
@@ -118,7 +116,7 @@ public class JmsConnectionFactory {
         MessageProducer myProducer = session.createProducer(myDest);
 
         // Get user input and create messages. Loop until user sends CR.
-        System.out.println("\nSending messages to" + myDest.toString() +
+        System.out.println("\nSending messages to " + myDest.toString() +
                 "\nEnter a blank line to quit.\n");
         do {
             byte[] input = new byte[80];
@@ -162,38 +160,38 @@ public class JmsConnectionFactory {
     // ---------------------------------------------------------------------------
     // Parse the command-line arguments
     // ---------------------------------------------------------------------------
-    static void parseArgs(String[] args) throws Exception {
-        for (int i = 0; i < args.length; i++) {
-            String arg = args[i].toLowerCase();
-            if (arg.equals("-url")) {
-                if (i + 1 < args.length) {
-                    url = args[++i];
-                }
-            } else if (arg.equals("-pub")) {
-                operationType = "put";
-                connFactoryType = connFactoryForTopic;
-            } else if (arg.equals("-sub")) {
-                operationType = "get";
-                connFactoryType = connFactoryForTopic;
-            } else if (arg.equals("-send")) {
-                operationType = "put";
-                connFactoryType = connFactoryForQueue;
-            } else if (arg.equals("-receive")) {
-                operationType = "get";
-                connFactoryType = connFactoryForQueue;
-            } else
-                // Report and discard any unknown command-line options
-                System.out.println("Ignoring unknown flag: " + arg);
-        }
-
-        if (operationType == null) {
-            System.out.println("No mode supplied.  Use -pub, -sub, -send, or -receive option.");
-            System.exit(-1);
-        }
-
-        System.out.println("Mode = " + operationType);
-        System.out.println("JNDI URL = " + url + "\n");
-    }
+//    static void parseArgs(String[] args) throws Exception {
+//        for (int i = 0; i < args.length; i++) {
+//            String arg = args[i].toLowerCase();
+//            if (arg.equals("-url")) {
+//                if (i + 1 < args.length) {
+//                    url = args[++i];
+//                }
+//            } else if (arg.equals("-pub")) {
+//                operationType = "put";
+//                connectTo = topicConnectionName;
+//            } else if (arg.equals("-sub")) {
+//                operationType = "get";
+//                connectTo = topicConnectionName;
+//            } else if (arg.equals("-send")) {
+//                operationType = "put";
+//                connectTo = queueConnectionName;
+//            } else if (arg.equals("-receive")) {
+//                operationType = "get";
+//                connectTo = queueConnectionName;
+//            } else
+//                // Report and discard any unknown command-line options
+//                System.out.println("Ignoring unknown flag: " + arg);
+//        }
+//
+//        if (operationType == null) {
+//            System.out.println("No mode supplied.  Use -pub, -sub, -send, or -receive option.");
+//            System.exit(-1);
+//        }
+//
+//        System.out.println("Mode = " + operationType);
+//        System.out.println("JNDI URL = " + url + "\n");
+//    }
 
     // End of JMSDemo class
 }
