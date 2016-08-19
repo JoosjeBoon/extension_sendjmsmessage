@@ -9,7 +9,7 @@ public class JmsConnectionFactory {
 
     // These are the JNDI object names -> these names are MQ specific. Consult the java documentation of the wanted queue server to find out which values can be used here.
     public static final String mqInitialContextFactoryClass = "org.apache.activemq.jndi.ActiveMQInitialContextFactory"; //websphere -> "com.sun.jndi.fscontext.RefFSContextFactory";
-    public static final String mqConnectionFactoryClass = "QueueConnectionFactory"; //"ConnectionFactory";
+    public static final String mqConnectionFactoryClass = "javax.jms.QueueConnectionFactory";
     public static final String queueConnectionName = "dynamicQueues/test-send-msg";
 
     // Application variables
