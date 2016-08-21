@@ -119,7 +119,7 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
         final String messageBody = buildMessageBodyFromTemplate(_messageTemplateString, fields, rowValues);
         final String id = ConvertToStringTransformer.transformValue(row.getValue(idColumn));
 
-        final boolean result = _jmsMessageSender2.simpleSend(); //_jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody, id);
+        final boolean result = true; //_jmsMessageSender2.simpleSend(); //_jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody, id);
         if (result) {
             _successCount.incrementAndGet();
         } else {

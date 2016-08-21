@@ -3,27 +3,53 @@ package org.datacleaner.extension.sendjmsmessage;
 import java.util.Hashtable;
 import javax.jms.*;
 import javax.naming.Context;
-import javax.naming.directory.InitialDirContext;
+import javax.naming.InitialContext;
+
+import org.apache.activemq.jndi.ActiveMQInitialContextFactory;
 
 public class JmsConnectionFactory {
 
     // These are the JNDI object names -> these names are MQ specific. Consult the java documentation of the wanted queue server to find out which values can be used here.
-    public static final String mqInitialContextFactoryClass = "org.apache.activemq.jndi.ActiveMQInitialContextFactory"; //websphere -> "com.sun.jndi.fscontext.RefFSContextFactory";
-    public static final String mqConnectionFactoryClass = "javax.jms.QueueConnectionFactory";
-    public static final String queueConnectionName = "dynamicQueues/test-send-msg";
+
+   // Active MQ
+//    public static final String mqInitialContextFactoryClass = ActiveMQInitialContextFactory.class.getCanonicalName();
+//    public static final String queueConnectionName = "dynamicQueues/test-send-msg";
+//    public static String url = "tcp://localhost:61616"; // JNDI Provider URL - The broker url active MQ default= tcp://localhost:61616
+
+    // Rabbit
+    public static final String mqInitialContextFactoryClass = ActiveMQInitialContextFactory.class.getCanonicalName();
+    //"com.sun.jndi.fscontext.RefFSContextFactory";
+    public static final String queueConnectionName = "jms/Queue/test-send-to-jms";
+    private static String info = "suite6-stable-1.humaninference.com";
+    public static String url = "amqp://guest:guest@suite6-stable-1.humaninference.com:5672"; // JNDI Provider URL - The broker url active MQ default= tcp://localhost:61616
+
+    // Websphere
+//    public static final String mqInitialContextFactoryClass = "com.sun.jndi.fscontext.RefFSContextFactory";
+//    public static final String queueConnectionName = "jms/Queue/test-send-to-jms";
+//    public static String url = "amq://suite6-stable-1:5672"; // JNDI Provider URL - The broker url active MQ default= tcp://localhost:61616
+
+    // This will be searched within the context so no need for cac name
+    public static final String mqConnectionFactoryClass = ConnectionFactory.class.getSimpleName(); //com.rabbitmq.client.ConnectionFactory.class.getCanonicalName();
 
     // Application variables
-    static Session session = null; // JMS Session
-    static Connection connection = null; // JMS Connection
-    static String connectTo = queueConnectionName; // Generic JMS Destination
-    static String operationType = "put"; // put or get from queue
+    private static Session session = null; // JMS Session
+    private static Connection connection = null; // JMS Connection
+    private static String operationType = "put"; // put or get from queue
 
-    // JNDI Provider URL - The broker url active MQ default= tcp://localhost:61616
-    static String url = "tcp://localhost:61616";
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
 
-        InitialDirContext ctx = null;
+        createActiveMqConnection();
+
+//        createRabbitConnection();
+
+//        createWebSphereConnection();
+
+    }
+
+    public static void createActiveMqConnection (){
+        InitialContext ctx = null;
+//        InitialDirContext ctx = null;
         Destination myDest = null;
         ConnectionFactory connFactory = null;
 
@@ -31,12 +57,11 @@ public class JmsConnectionFactory {
         // Production code would be required to have much finer grained exception handling. In any case, always print linked JMS exceptions.
         try {
 //            parseArgs(args);
-
             System.out.println(" ---- START Lookup initial context ---- ");
             Hashtable environment = new Hashtable();
             environment.put(Context.INITIAL_CONTEXT_FACTORY, mqInitialContextFactoryClass);
             environment.put(Context.PROVIDER_URL, url);
-            ctx = new InitialDirContext(environment);
+            ctx = new InitialContext(environment);
             System.out.println(" ---- FINISH Lookup initial context ---- ");
 
             // Note that the generic Connection Factory works for both queues &topics
@@ -55,9 +80,9 @@ public class JmsConnectionFactory {
 
             // Note that the generic Destination also works for both queues &
             // topics
-            System.out.println(" ---- START Lookup destination: " + connectTo);
-            myDest = (Destination) ctx.lookup(connectTo);
-            System.out.println(" ---- FINISH Lookup destination: " + connectTo);
+            System.out.println(" ---- START Lookup destination: " + queueConnectionName);
+            myDest = (Destination) ctx.lookup(queueConnectionName);
+            System.out.println(" ---- FINISH Lookup destination: " + queueConnectionName);
 
             // Either PUT or GET messages, depending on what was passed in from
             // Cmd Line
@@ -103,6 +128,25 @@ public class JmsConnectionFactory {
             }
         }
         System.out.print("\nFinished.");
+    }
+
+    public static void createRabbitConnection () throws Exception {
+        com.rabbitmq.client.ConnectionFactory factory = new com.rabbitmq.client.ConnectionFactory();
+        factory.setUri(url);
+        com.rabbitmq.client.Connection connection = factory.newConnection();
+
+        com.rabbitmq.client.Channel channel = connection.createChannel();
+        channel.queueDeclare("test-send-to-jms", true, false, false, null);
+        String message = "Hello World!2";
+        channel.basicPublish("myxchange", "myrkey", null, message.getBytes());
+        channel.close();
+        connection.close();
+        System.out.println("Message sending to rabbit Finished.");
+    }
+
+    public static void createWebSphereConnection (){
+
+//        System.out.println("Finished.");
     }
 
     // ---------------------------------------------------------------------------
