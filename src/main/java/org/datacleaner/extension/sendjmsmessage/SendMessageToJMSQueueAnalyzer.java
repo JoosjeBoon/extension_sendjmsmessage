@@ -1,31 +1,46 @@
 package org.datacleaner.extension.sendjmsmessage;
 
+import com.google.common.base.Strings;
+import org.apache.metamodel.util.FileHelper;
+import org.apache.metamodel.util.Func;
+import org.apache.metamodel.util.HasName;
+import org.apache.metamodel.util.Resource;
+import org.datacleaner.api.*;
+import org.datacleaner.components.categories.WriteSuperCategory;
+import org.datacleaner.components.convert.ConvertToStringTransformer;
+
+import javax.inject.Named;
 import java.io.InputStream;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
-import javax.inject.Named;
-
-import org.apache.metamodel.util.FileHelper;
-import org.apache.metamodel.util.Func;
-import org.apache.metamodel.util.Resource;
-import org.datacleaner.api.*;
-import org.datacleaner.components.categories.WriteSuperCategory;
-import org.datacleaner.components.convert.ConvertToStringTransformer;
-
-import com.google.common.base.Strings;
 
 /**
  * Analyzer for sending messages to JMS queue.
- * 
+ *
  */
 @Concurrent(true)
 @Named("Send message to JMS queue")
 @Description("Sends messages using a template file in which values can be dynamically merged into the message.")
 @Categorized(superCategory = WriteSuperCategory.class)
 public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQueueAnalyzerResult> {
+
+    public enum brokerType implements HasName {
+        TUM("Terracotta Universal Messaging"), AMQ("Apache MQ"), WMQ("WebSphere MQ");
+
+        private final String name;
+
+        brokerType(final String name) {
+            this.name = name;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+    }
 
     private static final String PROPERTY_INPUT_COLUMNS = "Values";
     private static final String PROPERTY_FIELD_NAMES = "Fields";
@@ -41,7 +56,7 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     InputColumn<?> idColumn;
 
     @Configured(value = "Select JMS Broker", order = 100)
-    String broker;
+    brokerType broker;
 
     @Configured(value = "Broker url", order = 101)
     String brokerUrl;
@@ -62,10 +77,7 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     ComponentContext _componentContext;
 
     private String _messageTemplateString;
-//    private JMSMessageToQueueSender _jmsMessageSender;
-
-    private JmsQueueSender _jmsMessageSender2;
-
+    private JMSMessageToQueueSender _jmsMessageSender;
     private AtomicInteger _successCount;
     private AtomicInteger _skipCount;
     private Collection<SendMessageToJMSQueueResult> _failures;
@@ -87,8 +99,8 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     public void init() {
         _messageTemplateString = loadTemplate(messageTemplate);
         try {
-//            _jmsMessageSender2 = new JmsQueueSender(JmsConnectionFactory.get(broker));
-            //_jmsMessageSender = new JMSMessageToQueueSender(brokerUrl, jmsQueueName);
+            String brokerType = broker.getName();
+            _jmsMessageSender = new JMSMessageToQueueSender(brokerUrl, jmsQueueName, brokerType);
         } catch (Exception e) {
             throw new IllegalStateException("JMS sender could not be initialized", e);
         }
@@ -119,16 +131,17 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
         final String messageBody = buildMessageBodyFromTemplate(_messageTemplateString, fields, rowValues);
         final String id = ConvertToStringTransformer.transformValue(row.getValue(idColumn));
 
-        final boolean result = true; //_jmsMessageSender2.simpleSend(); //_jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody, id);
-        if (result) {
+        final SendMessageToJMSQueueResult result = _jmsMessageSender.sendMessage(brokerUrl, jmsQueueName, messageBody,
+                id);
+        if (result.isSuccessful()) {
             _successCount.incrementAndGet();
         } else {
-//            _failures.add("failes");
+            _failures.add(result);
 
             // report to the execution log
-//            final Exception error = result.getError();
-//            _componentContext.publishMessage(new ExecutionLogMessage("Sending Message '"
-//                    + result.getMessageIdentifier() + " failed! " + (error == null ? "" : error.getMessage())));
+            final Exception error = result.getError();
+            _componentContext.publishMessage(new ExecutionLogMessage("Sending Message '"
+                    + result.getMessageIdentifier() + " failed! " + (error == null ? "" : error.getMessage())));
         }
     }
 
@@ -152,7 +165,7 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
 
     /**
      * Does a plain text replacement
-     * 
+     *
      * @param template
      * @param key
      * @param value
@@ -186,8 +199,8 @@ public class SendMessageToJMSQueueAnalyzer implements Analyzer<SendMessageToJMSQ
     @Close
     public void close() {
         try {
-            if (_jmsMessageSender2 != null) {
-               // _jmsMessageSender2.close();
+            if (_jmsMessageSender != null) {
+                _jmsMessageSender.close();
             }
         } catch (Exception e) {
             throw new IllegalStateException("Stopping CamelContext failed", e);
